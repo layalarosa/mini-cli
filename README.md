@@ -21,44 +21,75 @@ Asistente de linea de comandos que une tres piezas:
 ## Instalacion
 
 ```powershell
+git clone https://github.com/layalarosa/mini-cli.git
+cd mini-cli
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-## Uso
+## Indice RAG
 
-Construir el indice RAG (una sola vez, o tras cambiar los `.md`):
+Construir el indice (una sola vez, o tras cambiar los `.md` de `docs/`):
 
 ```powershell
 python rag_build.py
 ```
 
-Hacer una pregunta puntual:
+## Tres interfaces disponibles
+
+### 1. CLI mejorada (terminal)
+
+Terminal interactiva con rich: spinner, paneles coloreados, tabla de tool calls,
+comandos slash (`/help`, `/tools`, `/rag`).
 
 ```powershell
+# Una sola pregunta
 python cli.py "que limite de almacenamiento tiene la cuenta gratuita?"
-```
 
-Modo interactivo:
-
-```powershell
+# Modo interactivo
 python cli.py
 ```
 
-## Ejemplos verificados
+### 2. Web local (Streamlit)
 
+Chat estilo ChatGPT en el navegador, con historial, expanders para ver los
+tool calls y boton para reconstruir el indice RAG.
+
+```powershell
+streamlit run streamlit_app.py
 ```
-> que limite de almacenamiento tiene la cuenta gratuita de AcmeCloud?
-  [MCP] list_files({"path": "/docs/intro.md"})
-... la cuenta gratuita incluye 5 GB de almacenamiento. (Fuente: docs\intro.md)
 
-> usa la herramienta list_files para mostrar los archivos del directorio actual
-  [MCP] list_files({"path": "."})
-  -> lista real de archivos del proyecto
+Se abre en `http://localhost:8501`.
 
-> usa fetch_url para consultar la API https://httpbin.org/json
-  [MCP] fetch_url({"url": "https://httpbin.org/json", ...})
-  -> resumen de la respuesta JSON de la API
+### 3. Plug into MCP client (VS Code / Claude Desktop)
+
+Ya existe el archivo `.vscode/mcp.json` que registra el servidor MCP.
+
+En **VS Code** con GitHub Copilot:
+1. Abrir la carpeta del proyecto
+2. Copilot Chat -> modo Agent -> activar el servidor "herramientas-locales"
+3. Preguntar desde el chat de Copilot
+
+En **Claude Desktop**, agregar al `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "herramientas-locales": {
+      "command": "python",
+      "args": ["mcp_server.py"],
+      "cwd": "/ruta/a/mini-cli"
+    }
+  }
+}
 ```
+
+## Herramientas MCP
+
+- `list_files(path=".")`: lista archivos y carpetas de un directorio local.
+- `fetch_url(url, max_chars=2000)`: hace GET a una URL/API y devuelve status y
+  contenido truncado.
 
 ## Configuracion por variables de entorno
 
@@ -72,18 +103,14 @@ python cli.py
 | `RAG_TOP_K` | `4` | Fragmentos recuperados por consulta |
 | `MAX_TOOL_ROUNDS` | `5` | Maximas rondas de herramientas por turno |
 
-## Herramientas MCP
-
-- `list_files(path=".")`: lista archivos y carpetas de un directorio local.
-- `fetch_url(url, max_chars=2000)`: hace GET a una URL/API y devuelve status y
-  contenido truncado.
-
 ## Estructura
 
 ```
-mcp_server.py   Servidor MCP (herramientas locales)
-rag_build.py    Indexador RAG (LangChain + Ollama embeddings -> ChromaDB)
-cli.py          CLI principal (RAG + MCP tools + Ollama tool-calling)
-docs/           Documentos .md de prueba indexados
-chroma_db/      Base vectorial local (generada por rag_build.py)
+mcp_server.py       Servidor MCP (herramientas locales)
+rag_build.py        Indexador RAG (LangChain + Ollama embeddings -> ChromaDB)
+cli.py              CLI principal con rich (streaming + paneles + comandos)
+streamlit_app.py    Web local con Streamlit (chat UI + historial)
+.vscode/mcp.json    Config MCP para VS Code / Copilot
+docs/               Documentos .md de prueba indexados
+chroma_db/          Base vectorial local (generada por rag_build.py, gitignored)
 ```

@@ -5,3 +5,5 @@ langchain==0.1.10
 langchain-community==0.0.38
 langchain-text-splitters==0.0.2
 httpx>=0.28.1
+rich>=13.0
+streamlit>=1.40
