@@ -1,13 +1,20 @@
-# mini-cli: CLI con RAG + herramientas MCP + LLM local
+# AcmeCloud Private Assistant
 
-Asistente de linea de comandos que une tres piezas:
+Asistente de IA **local-first** para empresas. Aprende de documentación privada,
+responde preguntas de clientes y empleados, y propone acciones internas con
+aprobación humana y auditoría local.
+
+No se envían documentos ni conversaciones a servicios externos: el modelo
+Ollama, ChromaDB y los registros de acciones se ejecutan localmente.
+
+El sistema une estas piezas:
 
 1. **Servidor MCP** (`mcp_server.py`): expone herramientas locales mediante el
    protocolo MCP (stdlib).
 2. **Base RAG** (`rag_build.py`): indexa los `.md` de `docs/` en ChromaDB
    usando LangChain para la carga y division de documentos y embeddings
    generados con Ollama (`nomic-embed-text`).
-3. **CLI** (`cli.py`): captura el texto del usuario, recupera contexto del RAG,
+3. **Interfaces** (`cli.py`, `streamlit_app.py`): recuperan contexto del RAG,
    le entrega al LLM las herramientas MCP (tool-calling) y muestra la respuesta
    en pantalla.
 
@@ -15,7 +22,7 @@ Asistente de linea de comandos que une tres piezas:
 
 - Python 3.10+
 - [Ollama](https://ollama.com) en ejecucion con los modelos:
-  - `ollama pull llama3.1:8b` (LLM con soporte de tools)
+  - `ollama pull qwen3.5:2b` (LLM local rápido con soporte de tools)
   - `ollama pull nomic-embed-text` (embeddings para el RAG)
 
 ## Instalacion
@@ -27,6 +34,9 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
+
+Usa `.env.example` como referencia para definir las variables de entorno de tu
+servidor local.
 
 ## Indice RAG
 
@@ -51,16 +61,20 @@ python cli.py "que limite de almacenamiento tiene la cuenta gratuita?"
 python cli.py
 ```
 
-### 2. Web local (Streamlit)
+### 2. Portal empresarial privado (Streamlit)
 
-Chat estilo ChatGPT en el navegador, con historial, expanders para ver los
-tool calls y boton para reconstruir el indice RAG.
+Incluye dos espacios: atención a clientes e interfaz de equipo interno. El
+equipo puede pedir acciones como crear seguimientos, pero cada acción queda
+pendiente hasta que un operador la apruebe. Los registros y la auditoría quedan
+en `private_data/`, carpeta excluida de Git.
 
 ```powershell
 streamlit run streamlit_app.py
 ```
 
 Se abre en `http://localhost:8501`.
+
+Define `SUPPORT_EMAIL` para personalizar el botón de contacto.
 
 ### 3. Plug into MCP client (VS Code / Claude Desktop)
 
@@ -85,17 +99,29 @@ En **Claude Desktop**, agregar al `claude_desktop_config.json`:
 }
 ```
 
+## Privacidad y acciones
+
+- `OLLAMA_BASE_URL` solo acepta `localhost`, `127.0.0.1` o `::1`.
+- La aplicación no realiza peticiones web externas; `fetch_url` está deshabilitada.
+- La única acción inicial es `crear_seguimiento_cliente`, validada, aprobada
+  manualmente y auditada en un archivo local JSONL.
+
 ## Herramientas MCP
 
-- `list_files(path=".")`: lista archivos y carpetas de un directorio local.
-- `fetch_url(url, max_chars=2000)`: hace GET a una URL/API y devuelve status y
-  contenido truncado.
+- `list_files(path=".")`: lista archivos y carpetas **dentro del proyecto**.
+- `fetch_url(...)`: deshabilitada en el modo empresarial privado.
+
+## Pruebas
+
+```powershell
+python -m pytest -q
+```
 
 ## Configuracion por variables de entorno
 
 | Variable | Default | Descripcion |
 | --- | --- | --- |
-| `OLLAMA_MODEL` | `llama3.1:8b` | Modelo LLM con tool-calling |
+| `OLLAMA_MODEL` | `qwen3.5:2b` | Modelo LLM local con tool-calling |
 | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Modelo de embeddings |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | URL del servidor Ollama |
 | `CHROMA_DIR` | `./chroma_db` | Carpeta de la base vectorial |

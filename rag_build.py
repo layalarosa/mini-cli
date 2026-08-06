@@ -8,6 +8,7 @@ Uso:
 """
 
 import argparse
+import os
 import uuid
 
 import chromadb
@@ -16,11 +17,12 @@ from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-CHROMA_DIR = "./chroma_db"
-DOCS_DIR = "./docs"
-COLLECTION_NAME = "docs_rag"
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_EMBED_MODEL = "nomic-embed-text"
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+CHROMA_DIR = os.environ.get("CHROMA_DIR", os.path.join(PROJECT_ROOT, "chroma_db"))
+DOCS_DIR = os.environ.get("DOCS_DIR", os.path.join(PROJECT_ROOT, "docs"))
+COLLECTION_NAME = os.environ.get("CHROMA_COLLECTION", "docs_rag")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_EMBED_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 
 
 def build_index(docs_dir: str, chroma_dir: str, collection_name: str) -> None:

@@ -7,23 +7,37 @@ Expone dos herramientas:
 
 import os
 import time
+from pathlib import Path
 
-import httpx
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("herramientas-locales")
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+
+def resolve_project_path(path: str) -> Path:
+    """Devuelve una ruta existente solo si queda dentro del proyecto."""
+    candidate = (PROJECT_ROOT / (path or ".")).resolve()
+    try:
+        candidate.relative_to(PROJECT_ROOT)
+    except ValueError as exc:
+        raise ValueError("La ruta debe estar dentro del directorio del proyecto.") from exc
+    return candidate
 
 
 @mcp.tool()
 def list_files(path: str = ".") -> str:
-    """Lista los archivos y carpetas de un directorio local (nombre, tamano y fecha). El directorio actual del proyecto es '.' (por defecto); usa rutas relativas o absolutas de Windows."""
-    path = os.path.abspath(path or ".")
-    if not os.path.isdir(path):
-        return f"Error: '{path}' no es un directorio valido."
-
-    lines = [f"Directorio: {path}", ""]
+    """Lista archivos del proyecto (nombre, tamaño y fecha). Usa rutas relativas a su raíz."""
     try:
-        entries = sorted(os.scandir(path), key=lambda e: e.name.lower())
+        directory = resolve_project_path(path)
+    except ValueError as exc:
+        return f"Error: {exc}"
+    if not directory.is_dir():
+        return f"Error: '{path}' no es un directorio válido del proyecto."
+
+    lines = [f"Directorio: {directory.relative_to(PROJECT_ROOT) or '.'}", ""]
+    try:
+        entries = sorted(os.scandir(directory), key=lambda e: e.name.lower())
     except OSError as exc:
         return f"Error al leer el directorio: {exc}"
 
@@ -51,29 +65,8 @@ def list_files(path: str = ".") -> str:
 
 @mcp.tool()
 def fetch_url(url: str, max_chars: int = 2000) -> str:
-    """Hace una peticion GET a una URL o API publica y devuelve el codigo de estado y el contenido (truncado)."""
-    url = url.strip()
-    if not url.startswith(("http://", "https://")):
-        return f"Error: URL invalida: {url}"
-
-    try:
-        with httpx.Client(timeout=15.0, follow_redirects=True) as client:
-            response = client.get(url)
-    except httpx.HTTPError as exc:
-        return f"Error de conexion: {exc}"
-
-    body = response.text or ""
-    snippet = body.replace("\n", " ").replace("\r", " ")
-    snippet = " ".join(snippet.split())
-    if max_chars > 0:
-        snippet = snippet[:max_chars]
-
-    return (
-        f"URL: {url}\n"
-        f"Status: {response.status_code} {response.reason_phrase}\n"
-        f"Content-Type: {response.headers.get('content-type', 'desconocido')}\n"
-        f"Contenido:\n{snippet}"
-    )
+    """Inhabilitada: el asistente empresarial no realiza solicitudes externas."""
+    return "Error: fetch_url está deshabilitada para proteger información empresarial privada."
 
 
 if __name__ == "__main__":

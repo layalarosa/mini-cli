@@ -1,5 +1,6 @@
 # Base vectorial generada por rag_build.py
 chroma_db/
+private_data/
 
 # Python
 __pycache__/
@@ -11,6 +12,7 @@ venv/
 # Entorno y secretos
 .env
 .env.*
+!.env.example
 
 # Editor
 .vscode/
