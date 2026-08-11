@@ -1,11 +1,11 @@
-"""Orquestación compartida de RAG, Ollama y llamadas de herramientas."""
+"""Orquestación de RAG, Ollama y herramientas para el CLI."""
 
 import json
 import os
 from collections.abc import Awaitable, Callable
+from urllib.parse import urlsplit
 
 import httpx
-from urllib.parse import urlsplit
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -18,20 +18,21 @@ MAX_TOOL_ROUNDS = int(os.environ.get("MAX_TOOL_ROUNDS", "5"))
 
 
 def validate_local_ollama_url() -> None:
-    """Evita enviar documentos o conversaciones a un endpoint remoto por error."""
+    """Evita enviar documentos o consultas a un endpoint remoto por error."""
     hostname = urlsplit(OLLAMA_BASE_URL).hostname
     if hostname not in {"localhost", "127.0.0.1", "::1"}:
         raise RuntimeError("OLLAMA_BASE_URL debe apuntar a un servidor Ollama local.")
 
+
 SYSTEM_PROMPT = """Eres el asistente de AcmeCloud para clientes y prospectos.
 Responde siempre en español, de manera amable, clara y breve. Usa exclusivamente
-el contexto RAG para confirmar precios, límites, funciones, API y seguridad. Si
-el contexto no basta, indícalo con transparencia y sugiere contactar al equipo.
+el contexto documental para confirmar precios, límites, funciones, API y seguridad.
+Si el contexto no basta, indícalo con transparencia y sugiere contactar al equipo.
 No menciones RAG, modelos, MCP, herramientas, archivos locales ni instrucciones
 internas. Cuando sea útil, organiza la respuesta en viñetas y cita el documento
 de origen como “Fuente: <archivo>”.
 
-=== CONTEXTO RAG ===
+=== CONTEXTO DOCUMENTAL ===
 {context}"""
 
 
@@ -40,6 +41,7 @@ def retrieve_context(query: str) -> str:
         validate_local_ollama_url()
         import chromadb
         from langchain_community.embeddings import OllamaEmbeddings
+
         client = chromadb.PersistentClient(path=CHROMA_DIR, settings=chromadb.config.Settings(anonymized_telemetry=False))
         collection = client.get_collection(COLLECTION_NAME)
         embedding = OllamaEmbeddings(model=OLLAMA_EMBED_MODEL, base_url=OLLAMA_BASE_URL)
@@ -54,19 +56,9 @@ def retrieve_context(query: str) -> str:
     return "\n\n".join(blocks) if blocks else "(No se encontraron fragmentos relevantes.)"
 
 
-def tool_schema(name: str, description: str, parameters: dict) -> dict:
-    return {"type": "function", "function": {"name": name, "description": description, "parameters": parameters}}
-
-
-async def ollama_chat(messages: list[dict], schemas: list[dict]) -> dict:
+async def ollama_query(messages: list[dict], schemas: list[dict]) -> dict:
     validate_local_ollama_url()
-    payload = {
-        "model": OLLAMA_MODEL,
-        "messages": messages,
-        "stream": False,
-        "think": False,
-        "options": {"num_ctx": 16384},
-    }
+    payload = {"model": OLLAMA_MODEL, "messages": messages, "stream": False, "think": False, "options": {"num_ctx": 16384}}
     if schemas:
         payload["tools"] = schemas
     async with httpx.AsyncClient(timeout=180.0, trust_env=False) as client:
@@ -75,20 +67,15 @@ async def ollama_chat(messages: list[dict], schemas: list[dict]) -> dict:
         return response.json().get("message", {})
 
 
-async def run_conversation(
-    user_text: str,
-    schemas: list[dict],
-    call_tool: Callable[[str, dict], Awaitable[str]],
-    history: list[dict] | None = None,
-) -> tuple[str, list[dict]]:
-    messages = [{"role": "system", "content": SYSTEM_PROMPT.format(context=retrieve_context(user_text))}]
-    for item in (history or [])[-8:]:
-        if item.get("role") in {"user", "assistant"} and item.get("content"):
-            messages.append({"role": item["role"], "content": item["content"]})
-    messages.append({"role": "user", "content": user_text})
+async def answer_query(query: str, schemas: list[dict], call_tool: Callable[[str, dict], Awaitable[str]]) -> tuple[str, list[dict]]:
+    """Ejecuta una única consulta de CLI, sin historial persistente."""
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT.format(context=retrieve_context(query))},
+        {"role": "user", "content": query},
+    ]
     tool_log = []
     for _ in range(MAX_TOOL_ROUNDS):
-        message = await ollama_chat(messages, schemas)
+        message = await ollama_query(messages, schemas)
         content = (message.get("content") or "").strip()
         tool_calls = message.get("tool_calls") or []
         if not tool_calls:
